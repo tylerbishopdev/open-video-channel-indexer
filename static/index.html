@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Open.Video Channel Search</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background-image: url('/static/backgroundimage.png');
+            background-size: cover;
+            background-repeat: no-repeat;
+            background-attachment: fixed;
+            background-color: #fff;
+
+            color: #202124;
+        }
+
+        .container {
+            max-width: 584px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-top: 150px;
+            margin-bottom: 30px;
+        }
+
+        .header.results-mode {
+            margin-top: 30px;
+        }
+
+        .logo {
+            width: 100%;
+            height: auto;
+        }
+
+        .logo-blue { color: #1F5E7B; }
+        .logo-red { color: #1F5E7B; }
+        .logo-yellow { color: #1F5E7B; }
+        .logo-green { color: #1F5E7B; }
+
+        .subtitle {
+            color: #5f6368;
+            font-size: 14px;
+            margin-top: 8px;
+        }
+
+        .search-wrapper {
+            position: relative;
+            margin-bottom: 20px;
+        }
+
+        .search-box {
+            width: 100%;
+            padding: 12px 45px;
+            border: 1px solid #222e464d;
+            border-radius: 24px;
+            font-size: 16px;
+            outline: none;
+            transition: box-shadow 0.2s;
+        }
+
+        .search-box:hover {
+            box-shadow: 0 1px 6px rgba(32,33,36,.28);
+            border-color: rgba(110, 111, 114, 0.39);
+        }
+
+        .search-box:focus {
+            box-shadow: 0 1px 6px rgba(32,33,36,.28);
+            border-color: rgba(223, 225, 229, 0.323);
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 20px;
+            height: 20px;
+            opacity: 0.54;
+        }
+
+        .autocomplete-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 1px solid #dfe1e5;
+            border-radius: 0 0 24px 24px;
+            box-shadow: 0 4px 6px rgba(32,33,36,.28);
+            margin-top: -24px;
+            padding-top: 24px;
+            max-height: 400px;
+            overflow-y: auto;
+            display: none;
+            z-index: 1000;
+        }
+
+        .autocomplete-dropdown.active {
+            display: block;
+        }
+
+        .autocomplete-item {
+            padding: 10px 45px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .autocomplete-item:hover {
+            background-color: #f8f9fa;
+        }
+
+        .autocomplete-text {
+            flex: 1;
+        }
+
+        .autocomplete-meta {
+            font-size: 12px;
+            color: #70757a;
+        }
+
+        .search-button {
+            background-color: #f8f9fa22;
+            border: 1px solid #5e6c795e;
+            border-radius: 999px;
+            color: #3c4043;
+            font-size: 14px;
+            padding: 10px 20px;
+            margin: 11px 4px;
+            cursor: pointer;
+            outline: none;
+        }
+
+        .search-button:hover {
+            box-shadow: 0 1px 1px rgba(45, 45, 45, 0.161);
+            border: 1px solid #6d6d71;
+        }
+
+        .buttons {
+            text-align: center;
+            margin-top: 30px;
+        }
+
+        .results {
+            margin-top: 30px;
+        }
+
+        .result-stats {
+            color: #70757a;
+            font-size: 14px;
+            margin-bottom: 20px;
+        }
+
+        .result-item {
+            margin-bottom: 30px;
+        }
+
+        .result-url {
+            color: #202124;
+            font-size: 14px;
+            line-height: 1.3;
+            margin-bottom: 3px;
+            display: flex;
+            align-items: center;
+        }
+
+        .result-favicon {
+            width: 26px;
+            height: 26px;
+            margin-right: 12px;
+            border-radius: 50%;
+            background-color: #f1f3f4;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+        }
+
+        .result-domain {
+            color: #202124;
+        }
+
+        .result-title {
+            font-size: 20px;
+            line-height: 1.3;
+            margin-bottom: 3px;
+        }
+
+        .result-title a {
+            color: #1F5E7B;
+            text-decoration: none;
+        }
+
+        .result-title a:hover {
+            text-decoration: underline;
+        }
+
+        .result-title a:visited {
+            color: #405a5e;
+        }
+
+        .result-snippet {
+            color: #666f7b;
+            font-size: 14px;
+            line-height: 1.58;
+        }
+
+        .result-meta {
+            color: #70757a;
+            font-size: 13px;
+            margin-top: 5px;
+        }
+
+        .no-results {
+            text-align: center;
+            margin-top: 50px;
+            color: #70757a;
+        }
+
+        .stats-bar {
+            
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 24px;
+            font-weight: 500;
+            color: #70757a;
+            box-shadow: 0 1px 6px rgba(32,33,36,.28);
+            margin-top: 30px;
+            padding: 10px;
+            justify-content: space-around;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .stats-bar.visible {
+            display: flex;
+        }
+
+        .stats-bar p {
+            font-size: 16px;
+            color: #70757a;
+            margin: 5px 0;
+        }
+
+        .loading {
+            text-align: center;
+            margin-top: 50px;
+            color: #70757a;
+            display: none;
+        }
+
+        .loading.active {
+            display: block;
+        }
+
+        /* From Uiverse.io by Yaya12085 */ 
+        .stats {
+          display: inline-grid;
+          align-items: center;
+
+
+          color: #565d63cd;
+          border-radius: 1rem;
+          text-align: center;
+          padding: 1rem;
+        }
+
+        
+
+        .stat {
+          display: inline-grid;
+          width: 100%;
+          grid-template-columns: repeat(1, 1fr);
+          column-gap: 2rem;
+          text-align: center;
+          
+     
+        }
+
+        .stat-title {
+          grid-column-start: 1;
+          white-space: nowrap;
+          color: rgb(69, 69, 69);
+          font-size: small;        }
+
+        .stat-value {
+          grid-column-start: 1;
+          white-space: nowrap;
+          font-size: 1.5rem;
+          line-height: 2.5rem;
+          font-weight: 800;
+        }
+
+        .stat-desc {
+          grid-column-start: 1;
+          white-space: nowrap;
+          font-size: 0.75rem;
+          line-height: 1rem;
+          color: rgb(79, 79, 79);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header" id="header">
+            <div class="logo">
+                <img src="./static/O.V.png" alt="Open.Video Logo" width="50%" height="auto">
+            </div>
+            <div class="subtitle">Channel Search</div>
+        </div>
+
+        <div class="search-wrapper">
+            <svg class="search-icon" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                <path fill="#9aa0a6" d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"></path>
+            </svg>
+            <input type="text" class="search-box" id="searchBox" placeholder="Search channels..." autocomplete="off">
+            <div class="autocomplete-dropdown" id="autocompleteDropdown"></div>
+        </div>
+
+        <div class="buttons" id="buttons">
+            <button class="search-button" onclick="performSearch()">Search Channels</button>
+        </div>
+
+        <div class="stats-bar" id="statsBar"></div>
+
+        <div class="loading" id="loading">Searching...</div>
+
+        <div class="result-stats" id="resultStats"></div>
+
+        <div class="results" id="results"></div>
+    </div>
+
+    <script>
+        const searchBox = document.getElementById('searchBox');
+        const autocompleteDropdown = document.getElementById('autocompleteDropdown');
+        const resultsDiv = document.getElementById('results');
+        const resultStats = document.getElementById('resultStats');
+        const header = document.getElementById('header');
+        const buttons = document.getElementById('buttons');
+        const loading = document.getElementById('loading');
+        const statsBar = document.getElementById('statsBar');
+
+        let autocompleteTimeout;
+
+        // Load stats on page load
+        loadStats();
+
+        // Enter key triggers search
+        searchBox.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                performSearch();
+            }
+        });
+
+        // Autocomplete on input
+        searchBox.addEventListener('input', (e) => {
+            clearTimeout(autocompleteTimeout);
+            const query = e.target.value.trim();
+
+            if (query.length < 2) {
+                autocompleteDropdown.classList.remove('active');
+                return;
+            }
+
+            autocompleteTimeout = setTimeout(() => {
+                fetchAutocomplete(query);
+            }, 300);
+        });
+
+        // Close autocomplete when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.search-wrapper')) {
+                autocompleteDropdown.classList.remove('active');
+            }
+        });
+
+        async function loadStats() {
+            try {
+                const response = await fetch('/api/stats');
+                const data = await response.json();
+
+                if (data.total_channels > 0) {
+                    statsBar.innerHTML = `
+                        <div class="stats shadow">
+                            <div class="stat">
+                                <div class="stat-title">Channels Indexed</div>
+                                <div class="stat-value">${data.total_channels.toLocaleString()}</div>
+                            </div>
+                        </div>
+                        <div class="stats shadow">
+                            <div class="stat">
+                                <div class="stat-title">Total Videos</div>
+                                <div class="stat-value">${data.total_videos.toLocaleString()}</div>
+                            </div>
+                        </div>
+                        <div class="stats shadow">
+                            <div class="stat">
+                                <div class="stat-title">Avg Videos / Channel</div>
+                                <div class="stat-value">${data.avg_videos_per_channel}</div>
+                            </div>
+                        </div>
+                    `;
+                    statsBar.classList.add('visible');
+                }
+            } catch (error) {
+                console.error('Error loading stats:', error);
+            }
+        }
+
+        async function fetchAutocomplete(query) {
+            try {
+                const response = await fetch(`/api/autocomplete?q=${encodeURIComponent(query)}`);
+                const data = await response.json();
+
+                if (data.suggestions && data.suggestions.length > 0) {
+                    autocompleteDropdown.innerHTML = data.suggestions.map(item => `
+                        <div class="autocomplete-item" onclick="selectSuggestion('${escapeHtml(item.text)}')">
+                            <span class="autocomplete-text">${escapeHtml(item.text)}</span>
+                            <span class="autocomplete-meta">${item.video_count ? item.video_count.toLocaleString() + ' videos' : ''}</span>
+                        </div>
+                    `).join('');
+                    autocompleteDropdown.classList.add('active');
+                } else {
+                    autocompleteDropdown.classList.remove('active');
+                }
+            } catch (error) {
+                console.error('Error fetching autocomplete:', error);
+            }
+        }
+
+        function selectSuggestion(text) {
+            searchBox.value = text;
+            autocompleteDropdown.classList.remove('active');
+            performSearch();
+        }
+
+        async function performSearch() {
+            const query = searchBox.value.trim();
+
+            if (!query) {
+                return;
+            }
+
+            // Update UI to results mode
+            header.classList.add('results-mode');
+            autocompleteDropdown.classList.remove('active');
+            loading.classList.add('active');
+            resultsDiv.innerHTML = '';
+            resultStats.innerHTML = '';
+
+            try {
+                const response = await fetch(`/api/search?q=${encodeURIComponent(query)}&limit=20`);
+                const data = await response.json();
+
+                loading.classList.remove('active');
+
+                if (data.results && data.results.length > 0) {
+                    resultStats.innerHTML = `About ${data.count} results`;
+
+                    resultsDiv.innerHTML = data.results.map(channel => {
+                        const name = channel.name || channel.handle;
+                        const snippet = channel.description || 'No description available';
+                        const videoCount = channel.video_count ? channel.video_count.toLocaleString() : 'N/A';
+                        const joinDate = channel.join_date || 'Unknown';
+
+                        return `
+                            <div class="result-item">
+                                <div class="result-url">
+                                    <div class="result-favicon">📺</div>
+                                    <div>
+                                        <div class="result-domain">open.video</div>
+                                        <div style="font-size: 12px; color: #70757a;">@${escapeHtml(channel.handle)}</div>
+                                    </div>
+                                </div>
+                                <div class="result-title">
+                                    <a href="${escapeHtml(channel.url)}" target="_blank">${escapeHtml(name)}</a>
+                                </div>
+                                <div class="result-snippet">${escapeHtml(snippet.substring(0, 200))}${snippet.length > 200 ? '...' : ''}</div>
+                                <div class="result-meta">
+                                    ${videoCount} videos • Joined ${joinDate}
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                } else {
+                    resultsDiv.innerHTML = `
+                        <div class="no-results">
+                            <p>No results found for "<strong>${escapeHtml(query)}</strong>"</p>
+                            <p style="margin-top: 10px; font-size: 14px;">Try different keywords or check your spelling</p>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                loading.classList.remove('active');
+                resultsDiv.innerHTML = `
+                    <div class="no-results">
+                        <p>Error: ${escapeHtml(error.message)}</p>
+                    </div>
+                `;
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>

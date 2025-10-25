@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  indexer:
+    build: .
+    container_name: open-video-indexer
+    ports:
+      - "8080:5000"
+    volumes:
+      # Mount data directory for SQLite database persistence
+      - ./data:/app/data
+      # Mount scripts for easy development
+      - ./scripts:/app/scripts
+      # Mount static files for easy development
+      - ./static:/app/static
+    environment:
+      - DB_PATH=/app/data/open_video_channels.db
+    stdin_open: true
+    tty: true
+    # Run Flask web server
+    command: python scripts/app.py
