@@ -28,4 +28,4 @@ ENV PYTHONUNBUFFERED=1
 EXPOSE 5000
 
 # Default command
-CMD ["python", "scripts/app.py"]
+CMD ["gunicorn", "--workers", "4", "--bind", "0.0.0.0:5000", "scripts.app:app"]
