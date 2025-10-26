@@ -13,13 +13,12 @@
 
         body {
             font-family: Arial, sans-serif;
-            background-image: url('/static/backgroundimage.png');
-            background-size: cover;
+         
+            background-size: 100%;
             background-repeat: no-repeat;
             background-attachment: fixed;
-            background-color: #fff;
-
-            color: #202124;
+            background-image: linear-gradient(rgba(209, 220, 229, 0.821), rgba(114, 144, 148, 0.292)), url('/static/backgroundimage.png');
+            color: #e1e1e8;
         }
 
         .container {
@@ -54,39 +53,66 @@
             margin-top: 8px;
         }
 
+        /* From Uiverse.io by naelawadallah */ 
+        .search-header {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          text-align: center;
+          margin-bottom: 20px;
+          position: relative;
+        }
+
+        .search-header__input {
+          font-family: inherit;
+          font-size: 16px;
+          background-color: #383d3d;
+          border: solid 0.5px #525252;
+          color: #646464;
+          padding: 0.7rem 1rem;
+          border-radius: 25px;
+          width: 350px;
+          height: 48px;
+          transition: all ease-in-out 0.5s;
+          margin-right: -2rem;
+          opacity: 1;
+          text-align: center;
+          padding-right: 3rem;
+          align-items: center;
+        }
+
+        .search-header__input:hover,
+        .search-header__input:focus {
+          box-shadow: 0 0 1em #00000013;
+          color: #cddcd9;
+        }
+
+        .search-header__input:focus {
+          outline: none;
+          background-color: #141717ad;
+          color: #c8d7d4;
+        }
+
+        .search-header__input::-webkit-input-placeholder {
+          font-weight: 100;
+          color: #3a3a3a;
+        }
+
+        .search-header__button {
+
+background-color: transparent;
+border: none;
+cursor: pointer;
+        }
+
+        .search-header__icon {
+          height: 1.3em;
+          width: 1.3em;
+          fill: #ffffff;
+        }
+
         .search-wrapper {
             position: relative;
-            margin-bottom: 20px;
-        }
-
-        .search-box {
-            width: 100%;
-            padding: 12px 45px;
-            border: 1px solid #222e464d;
-            border-radius: 24px;
-            font-size: 16px;
-            outline: none;
-            transition: box-shadow 0.2s;
-        }
-
-        .search-box:hover {
-            box-shadow: 0 1px 6px rgba(32,33,36,.28);
-            border-color: rgba(110, 111, 114, 0.39);
-        }
-
-        .search-box:focus {
-            box-shadow: 0 1px 6px rgba(32,33,36,.28);
-            border-color: rgba(223, 225, 229, 0.323);
-        }
-
-        .search-icon {
-            position: absolute;
-            left: 15px;
-            top: 50%;
-            transform: translateY(-50%);
-            width: 20px;
-            height: 20px;
-            opacity: 0.54;
         }
 
         .autocomplete-dropdown {
@@ -96,7 +122,7 @@
             right: 0;
             background: white;
             border: 1px solid #dfe1e5;
-            border-radius: 0 0 24px 24px;
+            border-radius:  14px;
             box-shadow: 0 4px 6px rgba(32,33,36,.28);
             margin-top: -24px;
             padding-top: 24px;
@@ -108,6 +134,8 @@
 
         .autocomplete-dropdown.active {
             display: block;
+            margin-top: 3px;
+            background-color: #2d3236e4;
         }
 
         .autocomplete-item {
@@ -119,7 +147,7 @@
         }
 
         .autocomplete-item:hover {
-            background-color: #f8f9fa;
+            background-color: #2e88ae7c;
         }
 
         .autocomplete-text {
@@ -129,28 +157,6 @@
         .autocomplete-meta {
             font-size: 12px;
             color: #70757a;
-        }
-
-        .search-button {
-            background-color: #f8f9fa22;
-            border: 1px solid #5e6c795e;
-            border-radius: 999px;
-            color: #3c4043;
-            font-size: 14px;
-            padding: 10px 20px;
-            margin: 11px 4px;
-            cursor: pointer;
-            outline: none;
-        }
-
-        .search-button:hover {
-            box-shadow: 0 1px 1px rgba(45, 45, 45, 0.161);
-            border: 1px solid #6d6d71;
-        }
-
-        .buttons {
-            text-align: center;
-            margin-top: 30px;
         }
 
         .results {
@@ -233,12 +239,14 @@
             
             padding: 15px;
             border-radius: 8px;
-            font-size: 24px;
+            font-size: 14px;
             font-weight: 500;
             color: #70757a;
-            box-shadow: 0 1px 6px rgba(32,33,36,.28);
+      
             margin-top: 30px;
+            background-image: linear-gradient(rgba(164, 205, 215, 0.511), rgba(115, 161, 207, 0.186), rgba(112, 134, 153, 0.106));
             padding: 10px;
+
             justify-content: space-around;
             align-items: center;
             flex-wrap: wrap;
@@ -252,8 +260,8 @@
         }
 
         .stats-bar p {
-            font-size: 16px;
-            color: #70757a;
+            font-size: 12px;
+            color: #42678b;
             margin: 5px 0;
         }
 
@@ -296,7 +304,7 @@
           grid-column-start: 1;
           white-space: nowrap;
           color: rgb(69, 69, 69);
-          font-size: small;        }
+          font-size: 12px;        }
 
         .stat-value {
           grid-column-start: 1;
@@ -325,15 +333,15 @@
         </div>
 
         <div class="search-wrapper">
-            <svg class="search-icon" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-                <path fill="#9aa0a6" d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"></path>
-            </svg>
-            <input type="text" class="search-box" id="searchBox" placeholder="Search channels..." autocomplete="off">
+            <div class="search-header">
+                <input type="text" class="search-header__input" id="searchBox" placeholder="Search channels..." autocomplete="off">
+                <button class="search-header__button" onclick="performSearch()">
+                    <svg class="search-header__icon" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                        <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"></path>
+                    </svg>
+                </button>
+            </div>
             <div class="autocomplete-dropdown" id="autocompleteDropdown"></div>
-        </div>
-
-        <div class="buttons" id="buttons">
-            <button class="search-button" onclick="performSearch()">Search Channels</button>
         </div>
 
         <div class="stats-bar" id="statsBar"></div>
