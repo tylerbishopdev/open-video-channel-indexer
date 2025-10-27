@@ -1,0 +1,8 @@
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "cron.Dockerfile"
+
+[deploy]
+startCommand = "sh -c 'while true; do python scripts/indexer.py index; sleep 86400; done'"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
