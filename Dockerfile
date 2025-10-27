@@ -27,5 +27,5 @@ ENV PYTHONUNBUFFERED=1
 # Expose Flask port
 EXPOSE 5000
 
-# Default command
-CMD ["gunicorn", "--workers", "4", "--bind", "0.0.0.0:5000", "scripts.app:app"]
+# Default command - use PORT env var from Railway
+CMD sh -c "gunicorn --workers 4 --bind 0.0.0.0:${PORT:-5000} scripts.app:app"
