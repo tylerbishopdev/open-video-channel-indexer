@@ -13,6 +13,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY scripts/ ./scripts/
 COPY static/ ./static/
 
+RUN mkdir -p /app/data
+
 ENV PYTHONUNBUFFERED=1
 
 # This container will exit after the script runs
