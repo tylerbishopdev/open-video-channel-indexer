@@ -1,117 +1,134 @@
 # Open.Video Channel Indexer
 
-A Docker-based tool to create a searchable SQLite database of all channels on open.video.
+A Next.js application for creating a searchable database of all channels on open.video, deployable on Vercel.
 
 ## Features
 
 - 🔍 **Full-text search** across channel names, handles, and descriptions
-- 📊 **Statistics** on channels and video counts
-- 💾 **Persistent SQLite database** with volume mounting
-- 📤 **JSON export** for data portability
-- 🐳 **Dockerized** for easy deployment
+- 📊 **Live statistics** on channels and video counts
+- 💾 **Vercel Postgres database** with full-text search capabilities
+- 🤖 **Automated indexing** via Vercel Cron jobs
+- ⚡️ **Next.js 15** with React 19 and TypeScript
+- 🎨 **Modern UI** with autocomplete and responsive design
+- 🚀 **One-click deployment** to Vercel
+
+## Tech Stack
+
+- **Framework**: Next.js 15 (App Router)
+- **Language**: TypeScript
+- **Database**: Vercel Postgres (PostgreSQL)
+- **Deployment**: Vercel
+- **Automation**: Vercel Cron Jobs
+- **Styling**: CSS Modules
 
 ## Project Structure
 
 ```
 open-video-channel-indexer/
-├── Dockerfile              # Python environment setup
-├── docker-compose.yml      # Container orchestration
-├── requirements.txt        # Python dependencies
-├── scripts/
-│   └── indexer.py         # Main indexer script
-└── data/
-    └── open_video_channels.db  # SQLite database (created on first run)
+├── app/
+│   ├── api/
+│   │   ├── search/         # Search API endpoint
+│   │   ├── autocomplete/   # Autocomplete suggestions
+│   │   ├── stats/          # Database statistics
+│   │   ├── init-db/        # Database initialization
+│   │   └── cron/
+│   │       └── index/      # Automated indexing cron job
+│   ├── page.tsx            # Main search interface
+│   ├── layout.tsx          # Root layout
+│   └── globals.css         # Global styles
+├── lib/
+│   ├── db.ts               # Database utilities
+│   └── scraper.ts          # Channel scraping logic
+├── public/                 # Static assets
+├── vercel.json             # Vercel configuration & cron jobs
+└── DEPLOYMENT.md           # Detailed deployment guide
 ```
 
 ## Quick Start
 
-### 1. Build and Start Container
+### Local Development
 
+1. **Install dependencies:**
 ```bash
-cd /Users/shibasafe/EzoicProject/open-video-channel-indexer
-docker-compose up -d --build
+npm install
 ```
 
-### 2. Run Commands
+2. **Set up environment variables:**
 
-Execute commands inside the container:
-
-```bash
-# Test with first 10 channels
-docker exec -it open-video-indexer python scripts/indexer.py index 10
-
-# Index all channels (takes ~30 minutes for 1000+ channels)
-docker exec -it open-video-indexer python scripts/indexer.py index
-
-# View statistics
-docker exec -it open-video-indexer python scripts/indexer.py stats
-
-# Search for channels
-docker exec -it open-video-indexer python scripts/indexer.py search "cooking"
-
-# Export to JSON
-docker exec -it open-video-indexer python scripts/indexer.py export
+Create a `.env.local` file with your Vercel Postgres credentials:
+```env
+POSTGRES_URL="your-postgres-url"
+POSTGRES_PRISMA_URL="your-prisma-url"
+POSTGRES_URL_NON_POOLING="your-non-pooling-url"
+POSTGRES_USER="your-user"
+POSTGRES_HOST="your-host"
+POSTGRES_PASSWORD="your-password"
+POSTGRES_DATABASE="your-database"
+CRON_SECRET="your-secret-key"
 ```
 
-### 3. Access Database Directly
-
+3. **Initialize the database:**
 ```bash
-# Enter container shell
-docker exec -it open-video-indexer bash
-
-# Access SQLite database
-sqlite3 /app/data/open_video_channels.db
-
-# Example queries:
-SELECT COUNT(*) FROM channels;
-SELECT * FROM channels WHERE video_count > 100 ORDER BY video_count DESC LIMIT 10;
+npm run dev
+# In another terminal:
+curl -X POST http://localhost:3000/api/init-db \
+  -H "Authorization: Bearer your-secret-key"
 ```
 
-## Commands
-
-### Index Channels
-
+4. **Start development server:**
 ```bash
-# Index first N channels (for testing)
-docker exec -it open-video-indexer python scripts/indexer.py index 50
-
-# Index all channels from sitemap
-docker exec -it open-video-indexer python scripts/indexer.py index
+npm run dev
 ```
+
+Visit `http://localhost:3000`
+
+### Deploy to Vercel
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new)
+
+See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed deployment instructions.
+
+## API Endpoints
 
 ### Search Channels
-
 ```bash
-# Search by keyword
-docker exec -it open-video-indexer python scripts/indexer.py search "recipes"
-docker exec -it open-video-indexer python scripts/indexer.py search "gaming"
-docker exec -it open-video-indexer python scripts/indexer.py search "news"
+GET /api/search?q=cooking&limit=20
 ```
 
-### View Statistics
-
+### Autocomplete
 ```bash
-docker exec -it open-video-indexer python scripts/indexer.py stats
+GET /api/autocomplete?q=tech&limit=10
 ```
 
-### Export Data
-
+### Statistics
 ```bash
-# Export to default location (/app/data/channels_index.json)
-docker exec -it open-video-indexer python scripts/indexer.py export
-
-# Copy exported JSON to host
-docker cp open-video-indexer:/app/data/channels_index.json ./data/
+GET /api/stats
 ```
+
+### Initialize Database
+```bash
+POST /api/init-db
+Header: Authorization: Bearer YOUR_CRON_SECRET
+```
+
+### Manual Indexing
+```bash
+GET /api/cron/index?max=100&rate=500
+Header: Authorization: Bearer YOUR_CRON_SECRET
+```
+
+Parameters:
+- `max`: Number of channels to index (default: 100)
+- `rate`: Milliseconds between requests (default: 500)
 
 ## Database Schema
 
-### Main Table: `channels`
+### Table: `channels`
 
 | Column          | Type      | Description                    |
 |-----------------|-----------|--------------------------------|
-| id              | INTEGER   | Primary key                    |
-| channel_handle  | TEXT      | Channel handle (e.g., @name)   |
+| id              | SERIAL    | Primary key                    |
+| channel_handle  | TEXT      | Channel handle (unique)        |
 | channel_url     | TEXT      | Full channel URL               |
 | channel_name    | TEXT      | Display name                   |
 | video_count     | INTEGER   | Number of videos               |
@@ -120,104 +137,56 @@ docker cp open-video-indexer:/app/data/channels_index.json ./data/
 | logo_url        | TEXT      | Profile image URL              |
 | description     | TEXT      | Channel description            |
 | scraped_at      | TIMESTAMP | When data was indexed          |
+| search_vector   | tsvector  | Full-text search vector        |
 
-### FTS Table: `channels_fts`
+### Indexes
 
-Full-text search index for fast querying.
+- `channels_search_idx`: GIN index on `search_vector` for full-text search
+- `channels_video_count_idx`: B-tree index on `video_count` for sorting
 
-## Data Persistence
+## Automated Indexing
 
-The SQLite database is stored in `./data/` directory which is mounted as a Docker volume. This means:
+The application uses Vercel Cron Jobs to automatically index new channels:
 
-- ✅ Data persists across container restarts
-- ✅ Database is accessible from host machine
-- ✅ Can be backed up easily
+- **Schedule**: Every 6 hours (configurable in `vercel.json`)
+- **Batch Size**: 100 channels per run (adjustable)
+- **Rate Limiting**: 500ms between requests (configurable)
 
 ## Performance
 
-- **Indexing speed**: ~2 requests/second (0.5s rate limit)
-- **Estimated time**: ~8-10 minutes for 1000 channels
-- **Database size**: ~500KB per 100 channels
+- **Search**: PostgreSQL full-text search with ranking
+- **Indexing Speed**: ~2 requests/second (500ms rate limit)
+- **Database Size**: ~500KB per 100 channels
+- **Response Time**: <100ms for search queries
 
-## Maintenance
+## Environment Variables
 
-### Stop Container
+Required environment variables (auto-configured by Vercel):
 
-```bash
-docker-compose down
-```
+- `POSTGRES_URL`: PostgreSQL connection string
+- `POSTGRES_PRISMA_URL`: Prisma-compatible connection string
+- `POSTGRES_URL_NON_POOLING`: Non-pooling connection string
+- `POSTGRES_USER`: Database user
+- `POSTGRES_HOST`: Database host
+- `POSTGRES_PASSWORD`: Database password
+- `POSTGRES_DATABASE`: Database name
+- `CRON_SECRET`: Secret key for securing cron endpoints
 
-### Rebuild After Changes
+## Monitoring
 
-```bash
-docker-compose up -d --build
-```
+- **Vercel Dashboard**: View deployment logs and cron job executions
+- **Function Logs**: Monitor API performance and errors
+- **Database Analytics**: Track query performance in Vercel Postgres dashboard
 
-### View Logs
+## Legacy Python Version
 
-```bash
-docker logs open-video-indexer
-```
+The original Python/Docker version is still available in the repository. See the `scripts/` folder for the Python implementation. The Next.js version provides:
 
-### Backup Database
-
-```bash
-cp ./data/open_video_channels.db ./data/backup_$(date +%Y%m%d).db
-```
-
-## Troubleshooting
-
-### Container won't start
-
-```bash
-docker-compose logs
-```
-
-### Database locked
-
-Stop and restart the container:
-```bash
-docker-compose restart
-```
-
-### Reset database
-
-```bash
-rm ./data/open_video_channels.db
-docker-compose restart
-```
-
-## Advanced Usage
-
-### Custom SQL Queries
-
-```bash
-docker exec -it open-video-indexer sqlite3 /app/data/open_video_channels.db
-
-# Top channels by video count
-SELECT channel_name, video_count FROM channels
-WHERE video_count IS NOT NULL
-ORDER BY video_count DESC LIMIT 20;
-
-# Search with wildcards
-SELECT * FROM channels WHERE channel_name LIKE '%cook%';
-
-# Channels joined in 2024
-SELECT * FROM channels WHERE join_date LIKE '%2024%';
-```
-
-### Programmatic Access
-
-Since the database is in `./data/`, you can access it from other Python scripts:
-
-```python
-import sqlite3
-
-conn = sqlite3.connect('./data/open_video_channels.db')
-cursor = conn.cursor()
-cursor.execute('SELECT * FROM channels WHERE video_count > 100')
-results = cursor.fetchall()
-```
+- ✅ Better performance with PostgreSQL full-text search
+- ✅ Automated cron jobs without manual setup
+- ✅ Modern React UI with autocomplete
+- ✅ One-click deployment to Vercel
+- ✅ Scalable serverless architecture
 
 ## License
 
