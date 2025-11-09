@@ -6,18 +6,23 @@ Provides API endpoints and serves frontend
 
 from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
-import sqlite3
+import psycopg2
+import psycopg2.extras
 import os
+import re
+
+# Import the indexer class
+from scripts.indexer import OpenVideoIndexer
 
 app = Flask(__name__, static_folder='../static')
 CORS(app)
 
-DB_PATH = os.getenv('DB_PATH', '/app/data/open_video_channels.db')
-
-def get_db():
-    """Get database connection"""
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
+def get_db_conn():
+    """Get PostgreSQL database connection."""
+    db_url = os.getenv('POSTGRES_URL')
+    if not db_url:
+        raise ValueError("POSTGRES_URL environment variable is not set.")
+    conn = psycopg2.connect(db_url)
     return conn
 
 @app.route('/')
@@ -27,83 +32,52 @@ def index():
 
 @app.route('/api/search')
 def search():
-    """
-    Full search endpoint
-    Query params:
-        q: search query
-        limit: max results (default 20)
-    """
+    """Full search endpoint"""
     query = request.args.get('q', '')
     limit = request.args.get('limit', 20, type=int)
 
     if not query:
         return jsonify({'results': [], 'count': 0})
 
-    conn = get_db()
-    cursor = conn.cursor()
-
-    results = []
+    conn = get_db_conn()
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    
+    # Sanitize query for tsquery
+    # Replace special characters with spaces and use '|' for OR logic
+    sanitized_query = re.sub(r'[!\'()|&]', ' ', query).strip()
+    ts_query = ' | '.join(sanitized_query.split())
 
     try:
-        # Try FTS search with quoted query (handles special chars)
-        # Quote the entire query to treat it as a phrase
-        fts_query = f'"{query}"'
-
         cursor.execute('''
-            SELECT c.channel_handle, c.channel_name, c.video_count,
-                   c.join_date, c.channel_url, c.description, c.logo_url
-            FROM channels c
-            JOIN channels_fts fts ON c.id = fts.rowid
-            WHERE channels_fts MATCH ?
-            ORDER BY c.video_count DESC
-            LIMIT ?
-        ''', (fts_query, limit))
+            SELECT channel_handle, channel_name, video_count,
+                   join_date, channel_url, description, logo_url
+            FROM channels
+            WHERE fts_document @@ to_tsquery('english', %s)
+            ORDER BY video_count DESC NULLS LAST
+            LIMIT %s
+        ''', (ts_query, limit))
+        
+        results = [dict(row) for row in cursor.fetchall()]
 
-        for row in cursor.fetchall():
-            results.append({
-                'handle': row['channel_handle'],
-                'name': row['channel_name'],
-                'video_count': row['video_count'],
-                'join_date': row['join_date'],
-                'url': row['channel_url'],
-                'description': row['description'],
-                'logo_url': row['logo_url']
-            })
-
-    except Exception:
+    except Exception as e:
+        print(f"FTS search failed: {e}")
         # Fallback to LIKE search if FTS fails
-        pass
+        search_pattern = f'%{query}%'
+        cursor.execute('''
+            SELECT channel_handle, channel_name, video_count,
+                   join_date, channel_url, description, logo_url
+            FROM channels
+            WHERE channel_name ILIKE %s
+               OR channel_handle ILIKE %s
+               OR description ILIKE %s
+            ORDER BY video_count DESC NULLS LAST
+            LIMIT %s
+        ''', (search_pattern, search_pattern, search_pattern, limit))
+        results = [dict(row) for row in cursor.fetchall()]
 
-    # If no FTS results or FTS failed, try LIKE search as fallback
-    if not results:
-        try:
-            search_pattern = f'%{query}%'
-            cursor.execute('''
-                SELECT channel_handle, channel_name, video_count,
-                       join_date, channel_url, description, logo_url
-                FROM channels
-                WHERE channel_name LIKE ?
-                   OR channel_handle LIKE ?
-                   OR description LIKE ?
-                ORDER BY video_count DESC
-                LIMIT ?
-            ''', (search_pattern, search_pattern, search_pattern, limit))
-
-            for row in cursor.fetchall():
-                results.append({
-                    'handle': row['channel_handle'],
-                    'name': row['channel_name'],
-                    'video_count': row['video_count'],
-                    'join_date': row['join_date'],
-                    'url': row['channel_url'],
-                    'description': row['description'],
-                    'logo_url': row['logo_url']
-                })
-        except Exception as e:
-            conn.close()
-            return jsonify({'error': str(e)}), 500
-
-    conn.close()
+    finally:
+        cursor.close()
+        conn.close()
 
     return jsonify({
         'results': results,
@@ -113,30 +87,25 @@ def search():
 
 @app.route('/api/autocomplete')
 def autocomplete():
-    """
-    Autocomplete endpoint for search suggestions
-    Query params:
-        q: partial query
-        limit: max suggestions (default 10)
-    """
+    """Autocomplete endpoint"""
     query = request.args.get('q', '').strip()
     limit = request.args.get('limit', 10, type=int)
 
     if not query or len(query) < 2:
         return jsonify({'suggestions': []})
 
-    conn = get_db()
-    cursor = conn.cursor()
+    conn = get_db_conn()
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
 
     try:
-        # Search for matching channel names and handles
+        search_pattern = f'%{query}%'
         cursor.execute('''
             SELECT DISTINCT channel_name, channel_handle, video_count
             FROM channels
-            WHERE channel_name LIKE ? OR channel_handle LIKE ?
-            ORDER BY video_count DESC
-            LIMIT ?
-        ''', (f'%{query}%', f'%{query}%', limit))
+            WHERE channel_name ILIKE %s OR channel_handle ILIKE %s
+            ORDER BY video_count DESC NULLS LAST
+            LIMIT %s
+        ''', (search_pattern, search_pattern, limit))
 
         suggestions = []
         for row in cursor.fetchall():
@@ -152,13 +121,14 @@ def autocomplete():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     finally:
+        cursor.close()
         conn.close()
 
 @app.route('/api/stats')
 def stats():
     """Get database statistics"""
-    conn = get_db()
-    cursor = conn.cursor()
+    conn = get_db_conn()
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
 
     try:
         cursor.execute('SELECT COUNT(*) as total FROM channels')
@@ -172,19 +142,39 @@ def stats():
 
         return jsonify({
             'total_channels': total,
-            'total_videos': total_videos,
-            'avg_videos_per_channel': round(avg_videos, 1)
+            'total_videos': int(total_videos),
+            'avg_videos_per_channel': round(float(avg_videos), 1)
         })
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     finally:
+        cursor.close()
         conn.close()
 
 @app.route('/health')
 def health():
     """Health check endpoint"""
-    return jsonify({'status': 'healthy', 'database': DB_PATH})
+    return jsonify({'status': 'healthy'})
+
+@app.route('/api/cron/index')
+def cron_index():
+    """Cron job endpoint to trigger channel indexing."""
+    if os.getenv('VERCEL_ENV') != 'production' and not os.getenv('CRON_SECRET'):
+        return jsonify({'error': 'Not authorized'}), 401
+    
+    if os.getenv('CRON_SECRET') and request.headers.get('Authorization') != f"Bearer {os.getenv('CRON_SECRET')}":
+         return jsonify({'error': 'Not authorized'}), 401
+
+    max_channels_str = request.args.get('max')
+    max_channels = int(max_channels_str) if max_channels_str and max_channels_str.isdigit() else None
+
+    try:
+        indexer = OpenVideoIndexer()
+        indexer.index_channels(rate_limit=0.2, max_channels=max_channels)
+        return jsonify({'status': 'success', 'message': f'Indexing triggered for up to {max_channels or "all"} channels.'})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)

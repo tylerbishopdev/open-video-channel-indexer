@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """
 Open.Video Channel Indexer
-Creates a searchable SQLite database of all channels on open.video
+Creates a searchable PostgreSQL database of all channels on open.video
 """
 
-import sqlite3
+import psycopg2
+import psycopg2.extras
 import requests
 import xml.etree.ElementTree as ET
 from bs4 import BeautifulSoup
@@ -16,23 +17,29 @@ from urllib.parse import urlparse
 import re
 
 class OpenVideoIndexer:
-    def __init__(self, db_path=None):
-        self.db_path = db_path or os.getenv('DB_PATH', '/app/data/open_video_channels.db')
+    def __init__(self):
+        self.db_url = os.getenv('POSTGRES_URL')
+        if not self.db_url:
+            raise ValueError("POSTGRES_URL environment variable is not set.")
         self.session = requests.Session()
         self.session.headers.update({
             'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
         })
         self.setup_database()
 
+    def get_db_conn(self):
+        """Get PostgreSQL database connection."""
+        return psycopg2.connect(self.db_url)
+
     def setup_database(self):
-        """Create SQLite database with full-text search"""
-        conn = sqlite3.connect(self.db_path)
+        """Create PostgreSQL database tables and full-text search index."""
+        conn = self.get_db_conn()
         cursor = conn.cursor()
 
         # Main channels table
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS channels (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 channel_handle TEXT UNIQUE,
                 channel_url TEXT,
                 channel_name TEXT,
@@ -41,48 +48,44 @@ class OpenVideoIndexer:
                 last_modified TEXT,
                 logo_url TEXT,
                 description TEXT,
-                scraped_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
+                scraped_at TIMESTAMPTZ DEFAULT NOW()
+            );
         ''')
 
-        # Create full-text search virtual table
+        # Add a tsvector column for FTS
         cursor.execute('''
-            CREATE VIRTUAL TABLE IF NOT EXISTS channels_fts USING fts5(
-                channel_handle,
-                channel_name,
-                description,
-                content='channels',
-                content_rowid='id'
-            )
+            ALTER TABLE channels ADD COLUMN IF NOT EXISTS fts_document tsvector;
         ''')
 
-        # Triggers to keep FTS index in sync
+        # Create FTS index
         cursor.execute('''
-            CREATE TRIGGER IF NOT EXISTS channels_ai AFTER INSERT ON channels BEGIN
-                INSERT INTO channels_fts(rowid, channel_handle, channel_name, description)
-                VALUES (new.id, new.channel_handle, new.channel_name, new.description);
-            END
+            CREATE INDEX IF NOT EXISTS fts_document_idx ON channels USING GIN(fts_document);
         ''')
 
+        # Create trigger to update tsvector column automatically
         cursor.execute('''
-            CREATE TRIGGER IF NOT EXISTS channels_ad AFTER DELETE ON channels BEGIN
-                DELETE FROM channels_fts WHERE rowid = old.id;
-            END
-        ''')
+            CREATE OR REPLACE FUNCTION update_fts_document()
+            RETURNS TRIGGER AS $$
+            BEGIN
+                NEW.fts_document :=
+                    to_tsvector('english', COALESCE(NEW.channel_handle, '')) ||
+                    to_tsvector('english', COALESCE(NEW.channel_name, '')) ||
+                    to_tsvector('english', COALESCE(NEW.description, ''));
+                RETURN NEW;
+            END;
+            $$ LANGUAGE plpgsql;
 
-        cursor.execute('''
-            CREATE TRIGGER IF NOT EXISTS channels_au AFTER UPDATE ON channels BEGIN
-                UPDATE channels_fts SET
-                    channel_handle = new.channel_handle,
-                    channel_name = new.channel_name,
-                    description = new.description
-                WHERE rowid = new.id;
-            END
+            DROP TRIGGER IF EXISTS channels_fts_update_trigger ON channels;
+            CREATE TRIGGER channels_fts_update_trigger
+            BEFORE INSERT OR UPDATE ON channels
+            FOR EACH ROW
+            EXECUTE FUNCTION update_fts_document();
         ''')
 
         conn.commit()
+        cursor.close()
         conn.close()
-        print(f"✓ Database initialized: {self.db_path}")
+        print("✓ PostgreSQL Database initialized")
 
     def fetch_sitemap(self, url):
         """Fetch and parse XML sitemap"""
@@ -196,7 +199,7 @@ class OpenVideoIndexer:
             channels = channels[:max_channels]
             print(f"⚠ Limited to first {max_channels} channels for testing")
 
-        conn = sqlite3.connect(self.db_path)
+        conn = self.get_db_conn()
         cursor = conn.cursor()
 
         indexed_count = 0
@@ -211,7 +214,7 @@ class OpenVideoIndexer:
             url = channel['url']
 
             # Check if already indexed
-            cursor.execute('SELECT id FROM channels WHERE channel_handle = ?', (handle,))
+            cursor.execute('SELECT id FROM channels WHERE channel_handle = %s', (handle,))
             if cursor.fetchone():
                 skipped_count += 1
                 if i % 50 == 0:
@@ -227,7 +230,8 @@ class OpenVideoIndexer:
                     INSERT INTO channels (
                         channel_handle, channel_url, channel_name, video_count,
                         join_date, last_modified, logo_url, description
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (channel_handle) DO NOTHING
                 ''', (
                     handle,
                     url,
@@ -252,6 +256,7 @@ class OpenVideoIndexer:
             if i % 100 == 0:
                 print(f"\n  💾 Checkpoint: {indexed_count} indexed, {skipped_count} skipped, {error_count} errors\n")
 
+        cursor.close()
         conn.close()
 
         print("\n" + "="*60)
@@ -260,23 +265,21 @@ class OpenVideoIndexer:
         print(f"  ✓ Indexed: {indexed_count}")
         print(f"  ⊘ Skipped: {skipped_count}")
         print(f"  ✗ Errors: {error_count}")
-        print(f"  📁 Database: {self.db_path}")
         print("="*60 + "\n")
 
     def search(self, query, limit=20):
         """Search channels by name, handle, or description"""
-        conn = sqlite3.connect(self.db_path)
+        conn = self.get_db_conn()
         cursor = conn.cursor()
 
         # Full-text search
         cursor.execute('''
-            SELECT c.channel_handle, c.channel_name, c.video_count,
-                   c.join_date, c.channel_url, c.description
-            FROM channels c
-            JOIN channels_fts fts ON c.id = fts.rowid
-            WHERE channels_fts MATCH ?
-            ORDER BY c.video_count DESC
-            LIMIT ?
+            SELECT channel_handle, channel_name, video_count,
+                   join_date, channel_url, description
+            FROM channels
+            WHERE fts_document @@ to_tsquery('english', %s)
+            ORDER BY video_count DESC
+            LIMIT %s
         ''', (query, limit))
 
         results = cursor.fetchall()
@@ -286,7 +289,7 @@ class OpenVideoIndexer:
 
     def export_to_json(self, output_file='/app/data/channels_index.json'):
         """Export entire index to JSON"""
-        conn = sqlite3.connect(self.db_path)
+        conn = self.get_db_conn()
         cursor = conn.cursor()
 
         cursor.execute('''
@@ -317,7 +320,7 @@ class OpenVideoIndexer:
 
     def stats(self):
         """Display database statistics"""
-        conn = sqlite3.connect(self.db_path)
+        conn = self.get_db_conn()
         cursor = conn.cursor()
 
         cursor.execute('SELECT COUNT(*) FROM channels')
@@ -354,75 +357,7 @@ class OpenVideoIndexer:
         print("="*60 + "\n")
 
 
-def main():
-    """Interactive CLI"""
-    import sys
-
-    indexer = OpenVideoIndexer()
-
-    if len(sys.argv) < 2:
-        print("""
-Open.Video Channel Indexer
-===========================
-
-Usage:
-  python indexer.py index [max_channels]  - Index channels from sitemap
-  python indexer.py search <query>        - Search indexed channels
-  python indexer.py stats                 - Show database statistics
-  python indexer.py export [filename]     - Export to JSON
-
-Examples:
-  python indexer.py index 50              - Index first 50 channels (testing)
-  python indexer.py index                 - Index all channels
-  python indexer.py search "cooking"      - Search for cooking channels
-  python indexer.py stats                 - View database stats
-        """)
-        return
-
-    command = sys.argv[1]
-
-    if command == 'index':
-        max_channels = int(sys.argv[2]) if len(sys.argv) > 2 else None
-        indexer.index_channels(rate_limit=0.5, max_channels=max_channels)
-
-    elif command == 'search':
-        if len(sys.argv) < 3:
-            print("Error: Please provide a search query")
-            return
-
-        query = ' '.join(sys.argv[2:])
-        results = indexer.search(query)
-
-        print(f"\n🔍 Search results for: '{query}'")
-        print("="*80)
-
-        if results:
-            for handle, name, video_count, join_date, url, desc in results:
-                print(f"\n@{handle}")
-                if name:
-                    print(f"  Name: {name}")
-                if video_count:
-                    print(f"  Videos: {video_count:,}")
-                if join_date:
-                    print(f"  Joined: {join_date}")
-                print(f"  URL: {url}")
-                if desc:
-                    print(f"  Description: {desc[:100]}...")
-        else:
-            print("No results found")
-
-        print("="*80 + "\n")
-
-    elif command == 'stats':
-        indexer.stats()
-
-    elif command == 'export':
-        output = sys.argv[2] if len(sys.argv) > 2 else '/app/data/channels_index.json'
-        indexer.export_to_json(output)
-
-    else:
-        print(f"Unknown command: {command}")
-
-
 if __name__ == '__main__':
-    main()
+    # This part is for local CLI execution and can be adapted if needed
+    # For Vercel, the script is imported and used by app.py
+    pass
