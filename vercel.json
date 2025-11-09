@@ -13,7 +13,7 @@
   ],
   "crons": [
     {
-      "path": "/api/cron/index?max=100",
+      "path": "/api/cron/index",
       "schedule": "0 */12 * * *"
     }
   ]
