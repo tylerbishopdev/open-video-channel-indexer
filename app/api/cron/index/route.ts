@@ -19,20 +19,18 @@ export async function GET(request: NextRequest) {
     }
 
     const searchParams = request.nextUrl.searchParams;
-    const maxChannels = parseInt(searchParams.get('max') || '100', 10);
     const rateLimit = parseInt(searchParams.get('rate') || '500', 10); // ms between requests
 
-    console.log(`🚀 Starting channel indexing (max: ${maxChannels})`);
+    console.log(`🚀 Starting channel indexing`);
 
     // Fetch channels from sitemap
     const channels = await fetchChannelsSitemap();
-    const channelsToProcess = channels.slice(0, maxChannels);
 
     let indexed = 0;
     let skipped = 0;
     let errors = 0;
 
-    for (const channel of channelsToProcess) {
+    for (const channel of channels) {
       try {
         // Check if already indexed
         const exists = await channelExists(channel.handle);
@@ -76,7 +74,7 @@ export async function GET(request: NextRequest) {
       indexed,
       skipped,
       errors,
-      total_processed: channelsToProcess.length,
+      total_processed: channels.length,
     });
   } catch (error: any) {
     console.error('❌ Indexing error:', error);
